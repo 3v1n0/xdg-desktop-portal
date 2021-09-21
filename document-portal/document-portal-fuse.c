@@ -348,6 +348,31 @@ setattr_flags_to_string (int flags)
   return g_string_free (s, FALSE);
 }
 
+static char *
+renameat2_flags_to_string (int flags)
+{
+#if HAVE_RENAMEAT2
+  GString *s = g_string_new ("");
+
+  if (flags & RENAME_EXCHANGE)
+    g_string_append (s, "EXCHANGE,");
+
+  if (flags & RENAME_NOREPLACE)
+    g_string_append (s, "NOREPLACE,");
+
+  if (flags & RENAME_WHITEOUT)
+    g_string_append (s, "WHITEOUT,");
+
+  /* Remove last comma */
+  if (s->len > 0)
+    g_string_truncate (s, s->len - 1);
+
+  return g_string_free (s, FALSE);
+#else
+  return NULL;
+#endif
+}
+
 static guint
 devino_hash  (gconstpointer  key)
 {
@@ -2470,6 +2495,7 @@ xdp_fuse_rename (fuse_req_t  req,
 {
   g_autoptr(XdpInode) parent = xdp_inode_from_ino (parent_ino);
   g_autoptr(XdpInode) newparent = xdp_inode_from_ino (newparent_ino);
+  g_autofree char *rename_flags_string = renameat2_flags_to_string (flags);
   XdpDomain *domain;
   int res, errsv;
   int olddirfd, newdirfd, dirfd;
@@ -2477,7 +2503,8 @@ xdp_fuse_rename (fuse_req_t  req,
   xdp_autofd int close_fd2 = -1;
   const char *op = "RENAME";
 
-  g_debug ("RENAME %lx %s -> %lx %s", parent_ino, name, newparent_ino, newname);
+  g_debug ("RENAME %lx %s -> %lx %s (flags: %s)", parent_ino, name,
+           newparent_ino, newname, rename_flags_string);
 
   if (!xdp_document_inode_checks (op, req, parent,
                                   CHECK_CAN_WRITE |
@@ -2499,7 +2526,11 @@ xdp_fuse_rename (fuse_req_t  req,
       if (newdirfd < 0)
         return xdp_reply_err (op, req, -newdirfd);
 
+#if HAVE_RENAMEAT2
+      res = renameat2 (olddirfd, name, newdirfd, newname, flags);
+#else
       res = renameat (olddirfd, name, newdirfd, newname);
+#endif
       if (res != 0)
         return xdp_reply_err (op, req, errno);
 
@@ -2533,7 +2564,11 @@ xdp_fuse_rename (fuse_req_t  req,
           close (tmp_fd);
 
           g_mutex_lock (&domain->tempfile_mutex);
+#if HAVE_RENAMEAT2
+          res = renameat2 (dirfd, name, dirfd, tmpname, flags);
+#else
           res = renameat (dirfd, name, dirfd, tmpname);
+#endif
           if (res == -1)
             {
               res = -errno;
@@ -2564,7 +2599,11 @@ xdp_fuse_rename (fuse_req_t  req,
             {
               XdpTempfile *tempfile = stolen_value;
 
+#if HAVE_RENAMEAT2
+              res = renameat2 (dirfd, tempfile->tempname, dirfd, newname, flags);
+#else
               res = renameat (dirfd, tempfile->tempname, dirfd, newname);
+#endif
               errsv = errno;
 
               if (res == -1) /* Revert tempfile steal */
