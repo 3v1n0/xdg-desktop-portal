@@ -1,6 +1,6 @@
 #include "config.h"
 
-#define FUSE_USE_VERSION 26
+#define FUSE_USE_VERSION 35
 
 #include <glib-unix.h>
 
@@ -88,7 +88,6 @@
 
 static GThread *fuse_thread = NULL;
 static struct fuse_session *session = NULL;
-static struct fuse_chan *main_ch = NULL;
 static char *mount_path = NULL;
 static pthread_t fuse_pthread = 0;
 static uid_t my_uid;
@@ -1668,8 +1667,9 @@ invalidate_doc_domain (gpointer user_data)
 
   parent_ino = xdp_inode_to_ino (doc_domain->parent_inode);
 
-  if (g_atomic_int_get (&doc_domain->parent_inode->kernel_ref_count) > 0 && main_ch != NULL)
-    fuse_lowlevel_notify_inval_entry (main_ch, parent_ino, doc_domain->doc_id, strlen (doc_domain->doc_id));
+  if (g_atomic_int_get (&doc_domain->parent_inode->kernel_ref_count) > 0 &&
+      g_atomic_pointer_get (&session) != NULL)
+    fuse_lowlevel_notify_inval_entry (session, parent_ino, doc_domain->doc_id, strlen (doc_domain->doc_id));
 
   return FALSE;
 }
@@ -2465,7 +2465,8 @@ xdp_fuse_rename (fuse_req_t  req,
                  fuse_ino_t  parent_ino,
                  const char *name,
                  fuse_ino_t  newparent_ino,
-                 const char *newname)
+                 const char *newname,
+                 unsigned int flags)
 {
   g_autoptr(XdpInode) parent = xdp_inode_from_ino (parent_ino);
   g_autoptr(XdpInode) newparent = xdp_inode_from_ino (newparent_ino);
@@ -3004,20 +3005,34 @@ xdp_fuse_init_cb (void                  *userdata,
                   struct fuse_conn_info *conn)
 {
   g_debug ("INIT");
+
+  /* splice_read: use splice() to read from fuse pipe */
+  conn->want |= FUSE_CAP_SPLICE_READ;
+  /* splice_write: use splice() to write to fuse pipe */
+  conn->want |= FUSE_CAP_SPLICE_WRITE;
+  /* splice_move: move buffers from writing app to kernel during splice write */
+  conn->want |= FUSE_CAP_SPLICE_MOVE;
+  /* atomic_o_trunc: We handle O_TRUNC in create() */
+  conn->want |= FUSE_CAP_ATOMIC_O_TRUNC;
 }
 
 extern void on_fuse_unmount (void);
 
-static int destroyed;
+gboolean
+on_destroy_idle (gpointer data)
+{
+  on_fuse_unmount ();
+
+  return G_SOURCE_REMOVE;
+}
 
 static void
 xdp_fuse_destroy_cb (void *userdata)
 {
   g_debug ("DESTROY");
 
-  destroyed = 1;
-
-  on_fuse_unmount ();
+  /* Ensure we call this on the main thread */
+  g_idle_add (on_destroy_idle, NULL);
 }
 
 static struct fuse_lowlevel_ops xdp_fuse_oper = {
@@ -3059,14 +3074,19 @@ static struct fuse_lowlevel_ops xdp_fuse_oper = {
  .fallocate    = xdp_fuse_fallocate,
 };
 
-static gpointer
-xdp_fuse_mainloop (gpointer data)
+typedef struct {
+  struct fuse_args *args;
+  struct fuse_loop_config loop_config;
+  GError *error;
+} XdpFuseThreadData;
+
+static void
+xdp_fuse_mainloop (struct fuse_session *se,
+                   struct fuse_loop_config *loop_config)
 {
   const char *status;
 
-  fuse_pthread = pthread_self ();
-
-  fuse_session_loop_mt (session);
+  fuse_session_loop_mt (se, loop_config);
 
   status = getenv ("TEST_DOCUMENT_PORTAL_FUSE_STATUS");
   if (status)
@@ -3079,11 +3099,46 @@ xdp_fuse_mainloop (gpointer data)
       g_file_set_contents (status, s->str, -1, &error);
       g_assert_no_error (error);
     }
+}
 
-  fuse_session_remove_chan (main_ch);
-  fuse_session_destroy (session);
-  fuse_unmount (mount_path, main_ch);
-  main_ch = NULL;
+static gpointer
+xdp_fuse_thread (gpointer data)
+{
+  const char *path;
+  struct fuse_session *se;
+  XdpFuseThreadData *thread_data = data;
+  GError *error = NULL;
+
+  fuse_pthread = pthread_self ();
+
+  se = fuse_session_new (thread_data->args, &xdp_fuse_oper,
+                         sizeof (xdp_fuse_oper), NULL);
+  if (se == NULL)
+    {
+      g_set_error (&error, XDG_DESKTOP_PORTAL_ERROR,
+                   XDG_DESKTOP_PORTAL_ERROR_FAILED,
+                   "Can't create fuse session");
+      g_atomic_pointer_set (&thread_data->error, error);
+      return NULL;
+    }
+
+  path = xdp_fuse_get_mountpoint ();
+  if (fuse_session_mount (se, path) != 0)
+    {
+      fuse_session_destroy (se);
+      g_set_error (&error, XDG_DESKTOP_PORTAL_ERROR,
+                   XDG_DESKTOP_PORTAL_ERROR_FAILED,
+                   "Can't mount path %s", path);
+      g_atomic_pointer_set (&thread_data->error, error);
+      return NULL;
+    }
+
+  g_atomic_pointer_set (&session, se);
+  xdp_fuse_mainloop (session, &thread_data->loop_config);
+
+  fuse_session_unmount (session);
+  g_atomic_pointer_set (&session, NULL);
+  fuse_session_destroy (se);
 
   return NULL;
 }
@@ -3093,14 +3148,11 @@ xdp_fuse_init (GError **error)
 {
   /* Options:
    *  auto_unmount: Tell fusermount to auto unmount if we die.
-   *  splice_read: use splice() to read from fuse pipe
-   *  splice_write: use splice() to write to fuse pipe
-   *  splice_move: move buffers from writing app to kernel during splice write
-   *  atomic_o_trunc: We handle O_TRUNC in create()
-   *  big_writes: Allow > 4k writes
    */
-  char *fusermount_argv[] = { "xdp-fuse", "-osubtype=portal,fsname=portal,auto_unmount,splice_read,splice_write,splice_move,atomic_o_trunc,big_writes" };
+  char *fusermount_argv[] = { "xdp-fuse", "-osubtype=portal,fsname=portal,auto_unmount" };
   struct fuse_args args = FUSE_ARGS_INIT (G_N_ELEMENTS (fusermount_argv), fusermount_argv);
+  XdpFuseThreadData thread_data = {0};
+  struct fuse_cmdline_opts opts;
   struct stat st;
   struct statfs stfs;
   const char *path;
@@ -3137,7 +3189,7 @@ xdp_fuse_init (GError **error)
        (statfs_res == 0 && stfs.f_type == 0x65735546 /* fuse */)))
     {
       int count;
-      char *umount_argv[] = { "fusermount", "-u", "-z", (char *) path, NULL };
+      char *umount_argv[] = { "fusermount3", "-u", "-z", (char *) path, NULL };
 
       g_spawn_sync (NULL, umount_argv, NULL, G_SPAWN_SEARCH_PATH,
                     NULL, NULL, NULL, NULL, NULL, NULL);
@@ -3155,28 +3207,33 @@ xdp_fuse_init (GError **error)
       return FALSE;
     }
 
-  main_ch = fuse_mount (path, &args);
-  if (main_ch == NULL)
+  if (fuse_parse_cmdline (&args, &opts) != 0)
     {
       fuse_opt_free_args (&args);
-      g_set_error (error, XDG_DESKTOP_PORTAL_ERROR, XDG_DESKTOP_PORTAL_ERROR_FAILED,
-                   "Can't mount fuse fs on %s: %s", path, g_strerror (errno));
+      g_set_error (error, XDG_DESKTOP_PORTAL_ERROR,
+                   XDG_DESKTOP_PORTAL_ERROR_INVALID_ARGUMENT,
+                   "Impossible to parse command line");
       return FALSE;
     }
 
-  session = fuse_lowlevel_new (&args, &xdp_fuse_oper,
-                               sizeof (xdp_fuse_oper), NULL);
-  if (session == NULL)
+  thread_data.args = &args;
+  thread_data.loop_config.clone_fd = opts.clone_fd;
+  thread_data.loop_config.max_idle_threads = opts.max_idle_threads;
+
+  fuse_thread = g_thread_new ("fuse mainloop", xdp_fuse_thread, &thread_data);
+
+  while (g_atomic_pointer_get (&session) == NULL &&
+         g_atomic_pointer_get (&thread_data.error) == NULL)
+    g_main_context_iteration (NULL, FALSE);
+
+  if (thread_data.error != NULL)
     {
+      g_propagate_error (error, g_steal_pointer (&thread_data.error));
       fuse_opt_free_args (&args);
-      g_set_error (error, XDG_DESKTOP_PORTAL_ERROR, XDG_DESKTOP_PORTAL_ERROR_FAILED,
-                   "Can't create fuse session");
       return FALSE;
     }
-  fuse_session_add_chan (session, main_ch);
 
-  fuse_thread = g_thread_new ("fuse mainloop", xdp_fuse_mainloop, session);
-
+  g_assert (session != NULL);
   fuse_opt_free_args (&args);
 
   return TRUE;
@@ -3185,7 +3242,7 @@ xdp_fuse_init (GError **error)
 void
 xdp_fuse_exit (void)
 {
-  if (!destroyed && session)
+  if (g_atomic_pointer_get (&session))
     fuse_session_exit (session);
 
   if (fuse_pthread)
@@ -3243,7 +3300,7 @@ xdp_fuse_invalidate_doc_app (const char *doc_id,
 
   /* This can happen if fuse is not initialized yet for the very
      first dbus message that activated the service */
-  if (main_ch == NULL)
+  if (g_atomic_pointer_get (&session) == NULL)
     return;
 
   g_debug ("invalidate %s/%s", doc_id, opt_app_id ? opt_app_id : "*");
@@ -3276,12 +3333,12 @@ xdp_fuse_invalidate_doc_app (const char *doc_id,
 
       if (invalidate->filename)
         {
-          fuse_lowlevel_notify_inval_entry (main_ch, invalidate->ino,
+          fuse_lowlevel_notify_inval_entry (session, invalidate->ino,
                                             invalidate->filename, strlen (invalidate->filename));
           g_free (invalidate->filename);
         }
       else
-        fuse_lowlevel_notify_inval_inode (main_ch, invalidate->ino, 0, 0);
+        fuse_lowlevel_notify_inval_inode (session, invalidate->ino, 0, 0);
     }
 }
 
