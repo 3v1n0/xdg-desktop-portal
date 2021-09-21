@@ -223,6 +223,40 @@ static int ensure_docdir_inode (XdpInode *parent,
                                 struct fuse_entry_param *e,
                                 XdpInode **inode_out);
 
+typedef struct fuse_session XdpOwnedFuseSession;
+
+static XdpOwnedFuseSession *
+own_fuse_session (void)
+{
+  XdpOwnedFuseSession *se = g_atomic_pointer_get (&session);
+  XdpOwnedFuseSession *invalid_session = (XdpOwnedFuseSession *) &session;
+
+  if (!se)
+    return NULL;
+
+  while (se == invalid_session)
+    se = g_atomic_pointer_get (&session);
+
+  while (!g_atomic_pointer_compare_and_exchange (&session, se, invalid_session))
+    ;
+
+  return se;
+}
+
+static void
+release_fuse_session (XdpOwnedFuseSession *se)
+{
+  gpointer invalid_session = (gpointer) &session;
+
+  g_assert (se != NULL);
+  g_assert (se != invalid_session);
+  g_assert (g_atomic_pointer_get (&session) == invalid_session);
+
+  g_atomic_pointer_set (&session, se);
+}
+
+G_DEFINE_AUTOPTR_CLEANUP_FUNC (XdpOwnedFuseSession, release_fuse_session)
+
 static gboolean
 app_can_write_doc (PermissionDbEntry *entry, const char *app_id)
 {
@@ -1686,15 +1720,17 @@ static gboolean
 invalidate_doc_domain (gpointer user_data)
 {
   g_autoptr(XdpDomain) doc_domain = user_data;
+  g_autoptr(XdpOwnedFuseSession) se = NULL;
   ino_t parent_ino;
 
   g_atomic_int_set (&doc_domain->doc_queued_invalidate, 0);
 
   parent_ino = xdp_inode_to_ino (doc_domain->parent_inode);
+  se = own_fuse_session ();
 
-  if (g_atomic_int_get (&doc_domain->parent_inode->kernel_ref_count) > 0 &&
-      g_atomic_pointer_get (&session) != NULL)
-    fuse_lowlevel_notify_inval_entry (session, parent_ino, doc_domain->doc_id, strlen (doc_domain->doc_id));
+  if (se && g_atomic_int_get (&doc_domain->parent_inode->kernel_ref_count) > 0)
+    fuse_lowlevel_notify_inval_entry (se, parent_ino, doc_domain->doc_id,
+                                      strlen (doc_domain->doc_id));
 
   return FALSE;
 }
@@ -3175,7 +3211,8 @@ xdp_fuse_thread (gpointer data)
   g_atomic_pointer_set (&session, se);
   xdp_fuse_mainloop (session, &thread_data->loop_config);
 
-  fuse_session_unmount (session);
+  se = own_fuse_session ();
+  fuse_session_unmount (se);
   g_atomic_pointer_set (&session, NULL);
   fuse_session_destroy (se);
 
@@ -3281,8 +3318,13 @@ xdp_fuse_init (GError **error)
 void
 xdp_fuse_exit (void)
 {
-  if (g_atomic_pointer_get (&session))
-    fuse_session_exit (session);
+  XdpOwnedFuseSession *se = own_fuse_session ();
+
+  if (se)
+    {
+      fuse_session_exit (se);
+      g_clear_pointer (&se, release_fuse_session);
+    }
 
   if (fuse_pthread)
     pthread_kill (fuse_pthread, SIGHUP);
@@ -3335,11 +3377,13 @@ xdp_fuse_invalidate_doc_app (const char *doc_id,
                              const char *opt_app_id)
 {
   g_autoptr(GArray) invalidates = NULL;
+  g_autoptr(XdpOwnedFuseSession) se = NULL;
   int i;
 
+  se = own_fuse_session ();
   /* This can happen if fuse is not initialized yet for the very
      first dbus message that activated the service */
-  if (g_atomic_pointer_get (&session) == NULL)
+  if (se == NULL)
     return;
 
   g_debug ("invalidate %s/%s", doc_id, opt_app_id ? opt_app_id : "*");
@@ -3372,12 +3416,12 @@ xdp_fuse_invalidate_doc_app (const char *doc_id,
 
       if (invalidate->filename)
         {
-          fuse_lowlevel_notify_inval_entry (session, invalidate->ino,
+          fuse_lowlevel_notify_inval_entry (se, invalidate->ino,
                                             invalidate->filename, strlen (invalidate->filename));
           g_free (invalidate->filename);
         }
       else
-        fuse_lowlevel_notify_inval_inode (session, invalidate->ino, 0, 0);
+        fuse_lowlevel_notify_inval_inode (se, invalidate->ino, 0, 0);
     }
 }
 
