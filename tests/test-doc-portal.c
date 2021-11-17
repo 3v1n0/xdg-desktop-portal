@@ -609,15 +609,16 @@ test_add_named (void)
   assert_doc_has_contents (id1, basename1, "com.test.App1", "foobar2");
   assert_doc_not_exist (id1, basename1, "com.test.App2");
 
+  if (g_getenv ("TEST_INSTALLED_IN_CI"))
+    {
+      g_test_skip ("This test is unstable when launched as installed test in CI");
+      return;
+    }
+
   /* Update atomic with previous file */
   res = update_doc (id1, basename1, NULL, "foobar3", &error);
   g_assert_no_error (error);
   g_assert (res == TRUE);
-
-  if (g_getenv ("TEST_INSTALLED_IN_CI"))
-    {
-      g_debug ("This test is unstable when launched as installed test in CI");
-    }
 
   assert_doc_has_contents (id1, basename1, NULL, "foobar3");
   assert_doc_has_contents (id1, basename1, "com.test.App1", "foobar3");
