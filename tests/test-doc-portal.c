@@ -614,6 +614,12 @@ test_add_named (void)
   g_assert_no_error (error);
   g_assert (res == TRUE);
 
+  if (g_getenv ("TEST_INSTALLED_IN_CI"))
+    {
+      g_test_skip ("This test is unstable when launched as installed test in CI");
+      return;
+    }
+
   assert_doc_has_contents (id1, basename1, NULL, "foobar3");
   assert_doc_has_contents (id1, basename1, "com.test.App1", "foobar3");
   assert_doc_not_exist (id1, basename1, "com.test.App2");
