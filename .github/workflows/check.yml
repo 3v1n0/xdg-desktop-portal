@@ -75,7 +75,8 @@ jobs:
           gnome-desktop-testing-runner --report-directory installed-test-logs/ \
             -t $((TESTS_TIMEOUT * 60)) xdg-desktop-portal
       env:
-        G_MESSAGES_DEBUG: all
+        # This is disabled in installed tests because it underlines a race as per
+        # G_MESSAGES_DEBUG: all
         TEST_IN_CI: 1
         XDG_DATA_DIRS: /usr/local/share:/usr/share
         ASAN_OPTIONS: detect_leaks=0 # Right now we're not fully clean, but this gets us use-after-free etc
