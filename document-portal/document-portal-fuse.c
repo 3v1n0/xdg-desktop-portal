@@ -496,7 +496,7 @@ static XdpDomain *
 xdp_domain_new_root (void)
 {
   XdpDomain *domain = _xdp_domain_new (XDP_DOMAIN_ROOT);
-  domain->inodes = g_hash_table_new (g_direct_hash, g_direct_equal);
+  domain->inodes = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
   return domain;
 }
 
@@ -507,7 +507,7 @@ xdp_domain_new_by_app (XdpInode *root_inode)
   XdpDomain *domain = _xdp_domain_new (XDP_DOMAIN_BY_APP);
   domain->parent = xdp_domain_ref (root_domain);
   domain->parent_inode = xdp_inode_ref (root_inode);
-  domain->inodes = g_hash_table_new (g_direct_hash, g_direct_equal);
+  domain->inodes = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
   return domain;
 }
 
@@ -520,7 +520,7 @@ xdp_domain_new_app (XdpInode *parent_inode,
   domain->parent = xdp_domain_ref (parent);
   domain->parent_inode = xdp_inode_ref (parent_inode);
   domain->app_id = g_strdup (app_id);
-  domain->inodes = g_hash_table_new (g_direct_hash, g_direct_equal);
+  domain->inodes = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
   return domain;
 }
 
@@ -1620,7 +1620,7 @@ ensure_by_app_inode (XdpInode *by_app_inode,
     {
       g_autoptr(XdpDomain) app_domain = xdp_domain_new_app (by_app_inode, app_id);
       inode = xdp_inode_new (app_domain, NULL);
-      g_hash_table_insert (by_app_domain->inodes, app_domain->app_id, inode);
+      g_hash_table_insert (by_app_domain->inodes, g_strdup (app_id), inode);
     }
   G_UNLOCK(domain_inodes);
 
@@ -1651,7 +1651,7 @@ ensure_doc_inode (XdpInode *parent,
       g_autoptr(XdpDomain) doc_domain = xdp_domain_new_document (parent_domain, doc_id, doc_entry);
       doc_domain->parent_inode = xdp_inode_ref (parent);
       inode = xdp_inode_new (doc_domain, NULL);
-      g_hash_table_insert (parent_domain->inodes, doc_domain->doc_id, inode);
+      g_hash_table_insert (parent_domain->inodes, g_strdup (doc_id), inode);
     }
   G_UNLOCK(domain_inodes);
 
