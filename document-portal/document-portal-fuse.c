@@ -439,10 +439,10 @@ retry_atomic_decrement1:
         }
       g_hash_table_remove (physical_inodes, &inode->backing_devino);
 
-      G_UNLOCK (physical_inodes);
-
       close (inode->fd);
       g_free (inode);
+
+      G_UNLOCK (physical_inodes);
     }
 }
 
@@ -812,14 +812,14 @@ retry_atomic_decrement1:
       g_hash_table_remove (all_inodes, &inode->ino);
       G_UNLOCK (all_inodes);
 
-      G_UNLOCK (domain_inodes);
-
       /* By now we have no refs outstanding and no way to get at the inode, so free it */
 
       g_clear_pointer (&inode->domain_root_inode, xdp_inode_unref);
       g_clear_pointer (&inode->physical, xdp_physical_inode_unref);
       xdp_domain_unref (inode->domain);
       g_free (inode);
+
+      G_UNLOCK (domain_inodes);
     }
 
 }

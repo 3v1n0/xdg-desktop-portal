@@ -71,7 +71,7 @@ jobs:
       run: |
         test -n "$($RUN_CMD $AS_USER gnome-desktop-testing-runner -l xdg-desktop-portal)"
         $RUN_CMD $AS_USER \
-          env TEST_INSTALLED_IN_CI=1 XDG_DATA_DIRS=/src/tests/share/:$XDG_DATA_DIRS \
+          env XDG_DATA_DIRS=/src/tests/share/:$XDG_DATA_DIRS \
           gnome-desktop-testing-runner --report-directory installed-test-logs/ \
             -t $((TESTS_TIMEOUT * 60)) xdg-desktop-portal
       env:
