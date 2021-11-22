@@ -57,12 +57,12 @@ jobs:
     - name: Build xdg-desktop-portal
       run: $RUN_CMD $AS_USER make -j $(getconf _NPROCESSORS_ONLN)
 
-    - name: Run xdg-desktop-portal tests
-      # TODO: Build with -j (currently ends up with hangs in the tests)
-      run: $RUN_CMD $AS_USER timeout ${TESTS_TIMEOUT}m make check
-      env:
-        TEST_IN_CI: 1
-        ASAN_OPTIONS: detect_leaks=0 # Right now we're not fully clean, but this gets us use-after-free etc
+    # - name: Run xdg-desktop-portal tests
+    #   # TODO: Build with -j (currently ends up with hangs in the tests)
+    #   run: $RUN_CMD $AS_USER timeout ${TESTS_TIMEOUT}m make check
+    #   env:
+    #     TEST_IN_CI: 1
+    #     ASAN_OPTIONS: detect_leaks=0 # Right now we're not fully clean, but this gets us use-after-free etc
 
     - name: Install xdg-desktop-portal
       run: $RUN_CMD make install

@@ -496,7 +496,7 @@ static XdpDomain *
 xdp_domain_new_root (void)
 {
   XdpDomain *domain = _xdp_domain_new (XDP_DOMAIN_ROOT);
-  domain->inodes = g_hash_table_new (g_str_hash, g_str_equal);
+  domain->inodes = g_hash_table_new (g_direct_hash, g_direct_equal);
   return domain;
 }
 
@@ -507,7 +507,7 @@ xdp_domain_new_by_app (XdpInode *root_inode)
   XdpDomain *domain = _xdp_domain_new (XDP_DOMAIN_BY_APP);
   domain->parent = xdp_domain_ref (root_domain);
   domain->parent_inode = xdp_inode_ref (root_inode);
-  domain->inodes = g_hash_table_new (g_str_hash, g_str_equal);
+  domain->inodes = g_hash_table_new (g_direct_hash, g_direct_equal);
   return domain;
 }
 
@@ -520,7 +520,7 @@ xdp_domain_new_app (XdpInode *parent_inode,
   domain->parent = xdp_domain_ref (parent);
   domain->parent_inode = xdp_inode_ref (parent_inode);
   domain->app_id = g_strdup (app_id);
-  domain->inodes = g_hash_table_new (g_str_hash, g_str_equal);
+  domain->inodes = g_hash_table_new (g_direct_hash, g_direct_equal);
   return domain;
 }
 
