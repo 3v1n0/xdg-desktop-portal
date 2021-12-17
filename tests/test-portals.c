@@ -307,32 +307,38 @@ wait_for_test_procs (void)
 {
   GList *l;
 
-  g_list_foreach (test_procs, (GFunc) g_subprocess_send_signal,
-                  GINT_TO_POINTER (SIGTERM));
-
   for (l = test_procs; l; l = l->next)
     {
       GSubprocess *subprocess = G_SUBPROCESS (l->data);
       GError *error = NULL;
+      g_autofree char *identifier = NULL;
+
+      identifier = g_strdup (g_subprocess_get_identifier (subprocess));
+
+      g_debug ("Terminating and waiting for process %s", identifier);
+      g_subprocess_send_signal (subprocess, SIGTERM);
 
       /* This may lead the test to hang, we assume that the test suite or CI
        * can handle the case at upper level, without having us async function
        * and timeouts */
       g_subprocess_wait (subprocess, NULL, &error);
       g_assert_no_error (error);
+      g_assert_null (g_subprocess_get_identifier (subprocess));
+      g_assert_false (g_subprocess_get_if_exited (subprocess));
+      g_assert_true (g_subprocess_get_if_signaled (subprocess));
+      g_assert_cmpint (g_subprocess_get_term_sig (subprocess), ==, SIGTERM);
+      g_subprocess_wait (subprocess, NULL, &error);
+      g_assert_no_error (error);
+      // g_assert_true (g_subprocess_get_if_exited (subprocess)); // <- FAILS!!!
 
-      if (!g_subprocess_get_if_exited (subprocess))
-        {
-          g_assert_true (g_subprocess_get_if_signaled (subprocess));
-          g_assert_cmpint (g_subprocess_get_term_sig (subprocess), ==, SIGTERM);
-        }
-      else if (!g_subprocess_get_successful (subprocess))
-        {
-          g_test_message ("Process %s, exited with exit status %d",
-                          g_subprocess_get_identifier (subprocess),
-                          g_subprocess_get_exit_status (subprocess));
-        }
+      // if (!g_subprocess_get_successful (subprocess))
+      //   {
+      //     g_test_message ("Process %s, exited with exit status %d", identifier,
+      //                     g_subprocess_get_exit_status (subprocess));
+      //   }
     }
+
+  g_print("OK DONEEEE");
 }
 
 static void
