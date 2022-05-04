@@ -95,6 +95,15 @@
             </para></listitem>
           </varlistentry>
           <varlistentry>
+            <term>resident b</term>
+            <listitem><para>
+              When set the server may not automatically remove the notification
+              when an action has been invoked.
+              The notification may remain resident in the server until it is
+              explicitly removed by the user or by the sender
+            </para></listitem>
+          </varlistentry>
+          <varlistentry>
             <term>transient b</term>
             <listitem><para>
               When set the server may treat the notification as transient and
