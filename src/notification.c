@@ -326,6 +326,11 @@ check_notification (GVariant *notification,
           if (!check_value_type (key, value, G_VARIANT_TYPE_STRING, error))
             return FALSE;
         }
+      else if (strcmp (key, "transient") == 0)
+        {
+          if (!check_value_type (key, value, G_VARIANT_TYPE_BOOLEAN, error))
+            return FALSE;
+        }
       else if (strcmp (key, "default-action-target") == 0)
         ;
       else if (strcmp (key, "buttons") == 0)

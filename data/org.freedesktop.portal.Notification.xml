@@ -95,6 +95,13 @@
             </para></listitem>
           </varlistentry>
           <varlistentry>
+            <term>transient b</term>
+            <listitem><para>
+              When set the server may treat the notification as transient and
+              by-pass the server's persistence capability, if it should exist.
+            </para></listitem>
+          </varlistentry>
+          <varlistentry>
             <term>default-action s</term>
             <listitem><para>
               Name of an action that is exported by the application. This
