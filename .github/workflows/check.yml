@@ -4,7 +4,7 @@ on: [push, pull_request]
 
 env:
   DEBIAN_FRONTEND: noninteractive
-  TESTS_TIMEOUT: 15 # in minutes
+  TESTS_TIMEOUT: 1 # in minutes
 
 jobs:
   check:
