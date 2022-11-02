@@ -388,7 +388,7 @@ handle_add_in_thread_func (GTask *task,
 
   notification2 = maybe_remove_icon (notification);
   xdp_dbus_impl_notification_call_add_notification (impl,
-                                                    xdp_app_info_get_id (request->app_info),
+                                                    xdp_app_info_get_desktop_id (request->app_info),
                                                     id,
                                                     notification2,
                                                     NULL,
