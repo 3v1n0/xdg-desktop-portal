@@ -593,7 +593,7 @@ handle_open_in_thread_func (GTask *task,
 {
   XdpRequest *request = XDP_REQUEST (task_data);
   const char *parent_window;
-  const char *app_id = xdp_app_info_get_id (request->app_info);
+  const char *app_id = xdp_app_info_get_app_id (request->app_info);
   const char *activation_token;
   g_autofree char *uri = NULL;
   g_autoptr(XdpDbusImplRequest) impl_request = NULL;

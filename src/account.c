@@ -182,7 +182,6 @@ handle_get_user_information (XdpDbusAccount *object,
                              GVariant *arg_options)
 {
   XdpRequest *request = xdp_request_from_invocation (invocation);
-  const char *app_id = xdp_app_info_get_id (request->app_info);
   g_autoptr(GError) error = NULL;
   g_autoptr(XdpDbusImplRequest) impl_request = NULL;
   g_auto(GVariantBuilder) options =
@@ -214,7 +213,7 @@ handle_get_user_information (XdpDbusAccount *object,
 
   xdp_dbus_impl_account_call_get_user_information (impl,
                                                    request->id,
-                                                   app_id,
+                                                   xdp_app_info_get_app_id (request->app_info),
                                                    arg_parent_window,
                                                    g_variant_builder_end (&options),
                                                    NULL,

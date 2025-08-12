@@ -197,7 +197,7 @@ add_done (GObject *source,
     {
       Pair p;
 
-      p.app_id = (char *)xdp_app_info_get_id (call_data->app_info);
+      p.app_id = (char *) xdp_app_info_get_app_id (call_data->app_info);
       p.id = call_data->id;
 
       G_LOCK (active);
@@ -1073,7 +1073,7 @@ handle_add_in_thread_func (GTask        *task,
     }
 
   xdp_dbus_impl_notification_call_add_notification (impl,
-                                                    xdp_app_info_get_id (call_data->app_info),
+                                                    xdp_app_info_get_app_id (call_data->app_info),
                                                     call_data->id,
                                                     g_variant_builder_end (&builder),
                                                     call_data->out_fd_list,
@@ -1125,7 +1125,7 @@ remove_done (GObject *source,
     {
       Pair p;
 
-      p.app_id = (char *)xdp_app_info_get_id (call_data->app_info);
+      p.app_id = (char *) xdp_app_info_get_app_id (call_data->app_info);
       p.id = call_data->id;
 
       G_LOCK (active);
@@ -1148,7 +1148,7 @@ notification_handle_remove_notification (XdpDbusNotification *object,
                                        NULL);
 
   xdp_dbus_impl_notification_call_remove_notification (impl,
-                                                       xdp_app_info_get_id (call->app_info),
+                                                       xdp_app_info_get_app_id (call_data->app_info),
                                                        arg_id,
                                                        NULL,
                                                        remove_done, call_data);

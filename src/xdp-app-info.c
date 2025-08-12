@@ -63,6 +63,7 @@ typedef struct _XdpAppInfoPrivate
   /* identity */
   char *engine;
   char *id;
+  char *app_id;
   char *instance;
 
   /* app info */
@@ -117,6 +118,11 @@ xdp_app_info_initable_init (GInitable     *initable,
       return FALSE;
     }
 
+  if (priv->gappinfo)
+    priv->app_id = xdp_get_app_id_from_desktop_id (g_app_info_get_id (priv->gappinfo));
+  else
+    priv->app_id = g_strdup (priv->id);
+
   return TRUE;
 }
 
@@ -149,6 +155,7 @@ xdp_app_info_dispose (GObject *object)
   g_clear_pointer (&priv->engine, g_free);
   g_clear_pointer (&priv->id, g_free);
   g_clear_pointer (&priv->instance, g_free);
+  g_clear_pointer (&priv->app_id, g_free);
   g_clear_object (&priv->gappinfo);
 
   if (!g_clear_fd (&priv->pidfd, &error))
@@ -375,6 +382,18 @@ xdp_app_info_get_id (XdpAppInfo *app_info)
   priv = xdp_app_info_get_instance_private (app_info);
 
   return priv->id;
+}
+
+const char *
+xdp_app_info_get_app_id (XdpAppInfo *app_info)
+{
+  XdpAppInfoPrivate *priv;
+
+  g_return_val_if_fail (app_info != NULL, NULL);
+
+  priv = xdp_app_info_get_instance_private (app_info);
+
+  return priv->app_id;
 }
 
 const char *

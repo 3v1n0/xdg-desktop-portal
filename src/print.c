@@ -149,7 +149,6 @@ handle_print (XdpDbusPrint *object,
               GVariant *arg_options)
 {
   XdpRequest *request = xdp_request_from_invocation (invocation);
-  const char *app_id = xdp_app_info_get_id (request->app_info);
   g_autoptr(GError) error = NULL;
   g_autoptr(XdpDbusImplRequest) impl_request = NULL;
   g_auto(GVariantBuilder) opt_builder =
@@ -186,7 +185,7 @@ handle_print (XdpDbusPrint *object,
                       print_options, G_N_ELEMENTS (print_options), NULL);
   xdp_dbus_impl_print_call_print(impl,
                                  request->id,
-                                 app_id,
+                                 xdp_app_info_get_app_id (request->app_info),
                                  arg_parent_window,
                                  arg_title,
                                  arg_fd,
@@ -263,7 +262,6 @@ handle_prepare_print (XdpDbusPrint *object,
                       GVariant *arg_options)
 {
   XdpRequest *request = xdp_request_from_invocation (invocation);
-  const char *app_id = xdp_app_info_get_id (request->app_info);
   g_autoptr(GError) error = NULL;
   g_autoptr(XdpDbusImplRequest) impl_request = NULL;
   g_auto(GVariantBuilder) opt_builder =
@@ -299,7 +297,7 @@ handle_prepare_print (XdpDbusPrint *object,
                       prepare_print_options, G_N_ELEMENTS (prepare_print_options), NULL);
   xdp_dbus_impl_print_call_prepare_print (impl,
                                           request->id,
-                                          app_id,
+                                          xdp_app_info_get_app_id (request->app_info),
                                           arg_parent_window,
                                           arg_title,
                                           arg_settings,

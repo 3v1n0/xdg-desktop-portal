@@ -128,6 +128,7 @@ handle_set_wallpaper_in_thread_func (GTask *task,
   XdpRequest *request = XDP_REQUEST (task_data);
   const char *parent_window;
   const char *id = xdp_app_info_get_id (request->app_info);
+  const char *app_id = NULL;
   g_autoptr(GError) error = NULL;
   g_autofree char *uri = NULL;
   g_auto(GVariantBuilder) opt_builder =
@@ -169,6 +170,9 @@ handle_set_wallpaper_in_thread_func (GTask *task,
       return;
     }
 
+  if (g_strcmp0 (id, "") != 0)
+    app_id = xdp_app_info_get_app_id (request->app_info);
+
   g_variant_lookup (options, "show-preview", "b", &show_preview);
   if (!show_preview && permission != XDP_PERMISSION_YES)
     {
@@ -176,7 +180,6 @@ handle_set_wallpaper_in_thread_func (GTask *task,
       g_autoptr(GVariant) access_results = NULL;
       g_auto(GVariantBuilder) access_opt_builder =
         G_VARIANT_BUILDER_INIT (G_VARIANT_TYPE_VARDICT);
-      g_autofree gchar *app_id = NULL;
       g_autofree gchar *title = NULL;
       g_autofree gchar *subtitle = NULL;
       const gchar *body;
@@ -194,15 +197,9 @@ handle_set_wallpaper_in_thread_func (GTask *task,
           const gchar *name = NULL;
 
           if (info)
-            {
-              name = g_app_info_get_display_name (G_APP_INFO (info));
-              app_id = xdp_get_app_id_from_desktop_id (g_app_info_get_id (info));
-            }
+            name = g_app_info_get_display_name (G_APP_INFO (info));
           else
-            {
-              name = id;
-              app_id = g_strdup (id);
-            }
+            name = id;
 
           title = g_strdup_printf (_("Allow %s to Set Backgrounds?"), name);
           subtitle = g_strdup_printf (_("%s is requesting to be able to change the background image."), name);
@@ -293,7 +290,7 @@ handle_set_wallpaper_in_thread_func (GTask *task,
   g_debug ("Calling SetWallpaperURI with %s", uri);
   xdp_dbus_impl_wallpaper_call_set_wallpaper_uri (impl,
                                                   request->id,
-                                                  id,
+                                                  app_id ? app_id : "",
                                                   parent_window,
                                                   uri,
                                                   g_variant_builder_end (&opt_builder),

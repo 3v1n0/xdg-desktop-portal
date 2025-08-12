@@ -480,7 +480,7 @@ handle_open_file (XdpDbusFileChooser *object,
                   GVariant *arg_options)
 {
   XdpRequest *request = xdp_request_from_invocation (invocation);
-  const char *app_id = xdp_app_info_get_id (request->app_info);
+  const char *app_id = xdp_app_info_get_app_id (request->app_info);
   g_autoptr(GError) error = NULL;
   g_autoptr(XdpDbusImplRequest) impl_request = NULL;
   g_auto(GVariantBuilder) options =
@@ -600,7 +600,7 @@ handle_save_file (XdpDbusFileChooser *object,
                   GVariant *arg_options)
 {
   XdpRequest *request = xdp_request_from_invocation (invocation);
-  const char *app_id = xdp_app_info_get_id (request->app_info);
+  const char *app_id = xdp_app_info_get_app_id (request->app_info);
   g_autoptr(GError) error = NULL;
   XdpDbusImplRequest *impl_request;
   g_auto(GVariantBuilder) options =

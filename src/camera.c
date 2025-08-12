@@ -75,11 +75,10 @@ static gboolean
 query_permission_sync (XdpRequest *request)
 {
   XdpPermission permission;
-  const char *app_id;
   gboolean allowed;
 
-  app_id = (const char *)g_object_get_data (G_OBJECT (request), "app-id");
-  permission = xdp_get_permission_sync (app_id, PERMISSION_TABLE, PERMISSION_DEVICE_CAMERA);
+  permission = xdp_get_permission_sync (xdp_app_info_get_id (request->app_info),
+                                        PERMISSION_TABLE, PERMISSION_DEVICE_CAMERA);
   if (permission == XDP_PERMISSION_ASK || permission == XDP_PERMISSION_UNSET)
     {
       g_auto(GVariantBuilder) opt_builder =
@@ -89,18 +88,12 @@ query_permission_sync (XdpRequest *request)
       guint32 response = 2;
       g_autoptr(GVariant) results = NULL;
       g_autoptr(GError) error = NULL;
-      g_autoptr(GAppInfo) info = NULL;
       g_autoptr(XdpDbusImplRequest) impl_request = NULL;
-
-      if (app_id[0] != 0)
-        {
-          g_autofree char *desktop_id = g_strconcat (app_id, ".desktop", NULL);
-          info = (GAppInfo*)g_desktop_app_info_new (desktop_id);
-        }
+      GAppInfo *info = NULL;
 
       g_variant_builder_add (&opt_builder, "{sv}", "icon", g_variant_new_string ("camera-web-symbolic"));
 
-      if (info)
+      if ((info = xdp_app_info_get_gappinfo (request->app_info)))
         {
           title = g_strdup_printf (_("Allow %s to Use the Camera?"), g_app_info_get_display_name (info));
           body = g_strdup_printf (_("%s wants to access camera devices."), g_app_info_get_display_name (info));
@@ -125,7 +118,7 @@ query_permission_sync (XdpRequest *request)
 
       if (!xdp_dbus_impl_access_call_access_dialog_sync (access_impl,
                                                          request->id,
-                                                         app_id,
+                                                         xdp_app_info_get_app_id (request->app_info),
                                                          "",
                                                          title,
                                                          "",
@@ -147,8 +140,9 @@ query_permission_sync (XdpRequest *request)
 
       if (permission == XDP_PERMISSION_UNSET)
         {
-          xdp_set_permission_sync (app_id, PERMISSION_TABLE, PERMISSION_DEVICE_CAMERA,
-                               allowed ? XDP_PERMISSION_YES : XDP_PERMISSION_NO);
+          xdp_set_permission_sync (xdp_app_info_get_id (request->app_info),
+                                   PERMISSION_TABLE, PERMISSION_DEVICE_CAMERA,
+                                   allowed ? XDP_PERMISSION_YES : XDP_PERMISSION_NO);
         }
     }
   else
@@ -192,7 +186,6 @@ handle_access_camera (XdpDbusCamera *object,
                       GVariant *arg_options)
 {
   XdpRequest *request = xdp_request_from_invocation (invocation);
-  const char *app_id;
   g_autoptr(GTask) task = NULL;
 
   if (xdp_dbus_impl_lockdown_get_disable_camera (lockdown))
@@ -206,9 +199,6 @@ handle_access_camera (XdpDbusCamera *object,
     }
 
   REQUEST_AUTOLOCK (request);
-
-  app_id = xdp_app_info_get_id (request->app_info);
-  g_object_set_data_full (G_OBJECT (request), "app-id", g_strdup (app_id), g_free);
 
   xdp_request_export (request, g_dbus_method_invocation_get_connection (invocation));
 

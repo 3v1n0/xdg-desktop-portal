@@ -254,6 +254,7 @@ class AppInfo:
 
     kind: AppInfoKind
     app_id: str
+    permissions_id: str
     desktop_file: str
     env: dict[str, str] = field(default_factory=dict)
     files: dict[Path, bytes] = field(default_factory=dict)
@@ -290,6 +291,7 @@ class AppInfo:
         return cls(
             kind=kind,
             app_id=app_id,
+            permissions_id=app_id,
             desktop_file=desktop_file,
             env=env,
             files=files,
@@ -364,6 +366,7 @@ enumerable-devices={usb_queries}
         return cls(
             kind=kind,
             app_id=app_id,
+            permissions_id=app_id,
             desktop_file=desktop_file,
             env=env,
             files=files,
@@ -379,8 +382,9 @@ enumerable-devices={usb_queries}
         metadata: bytes | None = None,
     ):
         kind = AppInfoKind.SNAP
-        app_id = f"snap.{snap_name}"
-        desktop_file = f"{snap_name}_{app_name}.desktop"
+        permissions_id = f"snap.{snap_name}"
+        app_id = f"{snap_name}_{app_name}.desktop"
+        desktop_file = f"{app_id}.desktop"
         env = {
             "XDG_DESKTOP_PORTAL_TEST_APP_INFO_KIND": "snap",
         }
@@ -424,6 +428,7 @@ DesktopFile={desktop_file}
         return cls(
             kind=kind,
             app_id=app_id,
+            permissions_id=permissions_id,
             desktop_file=desktop_file,
             env=env,
             files=files,
